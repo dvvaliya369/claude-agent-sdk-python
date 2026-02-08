@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- **Extended thinking support for Opus 4.6**: Added `extended-thinking-2025-01-28` beta feature to `SdkBeta` type to enable thinking blocks for `claude-opus-4-6` model. To use extended thinking with Opus 4.6, pass `betas=["extended-thinking-2025-01-28"]` in `ClaudeAgentOptions`
+
 ## 0.1.33
 
 ### Internal/Other Changes
