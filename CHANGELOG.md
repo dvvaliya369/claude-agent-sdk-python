@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- **Extended thinking support for Opus 4.6**: Added `extended-thinking-2025-02-06` beta flag to `SdkBeta` type to enable thinking blocks with Claude Opus 4.6 and newer models. Thinking blocks now require the extended-thinking beta header, which was not needed in Opus 4.5. Updated examples and tests to include the beta flag when using thinking features.
+
 ## 0.1.33
 
 ### Internal/Other Changes
