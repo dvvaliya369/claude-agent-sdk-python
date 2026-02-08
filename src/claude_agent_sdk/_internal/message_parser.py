@@ -8,6 +8,7 @@ from ..types import (
     AssistantMessage,
     ContentBlock,
     Message,
+    RedactedThinkingBlock,
     ResultMessage,
     StreamEvent,
     SystemMessage,
@@ -103,6 +104,12 @@ def parse_message(data: dict[str, Any]) -> Message:
                                 ThinkingBlock(
                                     thinking=block["thinking"],
                                     signature=block["signature"],
+                                )
+                            )
+                        case "redacted_thinking":
+                            content_blocks.append(
+                                RedactedThinkingBlock(
+                                    data=block["data"],
                                 )
                             )
                         case "tool_use":
