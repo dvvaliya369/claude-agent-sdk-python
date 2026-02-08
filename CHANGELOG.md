@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- **Interleaved thinking support**: Fixed issue where `ThinkingBlock` content was not being returned in the response stream when using `max_thinking_tokens`. The SDK now automatically adds the `interleaved-thinking-2025-05-14` beta header when `max_thinking_tokens` is set, enabling thinking blocks to be streamed for all Claude models. This is particularly important for Claude Opus 4.6, which requires this beta header to enable streaming of thinking content.
+
 ## 0.1.33
 
 ### Internal/Other Changes

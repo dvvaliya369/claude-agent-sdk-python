@@ -210,8 +210,19 @@ class SubprocessCLITransport(Transport):
         if self._options.fallback_model:
             cmd.extend(["--fallback-model", self._options.fallback_model])
 
-        if self._options.betas:
-            cmd.extend(["--betas", ",".join(self._options.betas)])
+        # Handle betas - automatically add interleaved-thinking beta when thinking is enabled
+        betas_to_use = list(self._options.betas) if self._options.betas else []
+        
+        # Add interleaved-thinking beta if max_thinking_tokens is set
+        # This enables thinking blocks to be returned in the stream for Claude 4 models
+        # For Opus 4.6+, this beta is automatically enabled with adaptive thinking
+        if self._options.max_thinking_tokens is not None:
+            interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
+            if interleaved_thinking_beta not in betas_to_use:
+                betas_to_use.append(interleaved_thinking_beta)
+        
+        if betas_to_use:
+            cmd.extend(["--betas", ",".join(betas_to_use)])
 
         if self._options.permission_prompt_tool_name:
             cmd.extend(
