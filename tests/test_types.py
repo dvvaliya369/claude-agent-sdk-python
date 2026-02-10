@@ -14,6 +14,7 @@ from claude_agent_sdk import (
 from claude_agent_sdk.types import (
     PostToolUseHookSpecificOutput,
     PreToolUseHookSpecificOutput,
+    RedactedThinkingBlock,
     TextBlock,
     ThinkingBlock,
     ToolResultBlock,
@@ -46,6 +47,19 @@ class TestMessageTypes:
         assert len(msg.content) == 1
         assert msg.content[0].thinking == "I'm thinking..."
         assert msg.content[0].signature == "sig-123"
+
+    def test_redacted_thinking_block(self):
+        """Test creating a RedactedThinkingBlock."""
+        block = RedactedThinkingBlock(data="encrypted-data-content")
+        assert block.data == "encrypted-data-content"
+
+    def test_assistant_message_with_redacted_thinking(self):
+        """Test creating an AssistantMessage with redacted thinking content."""
+        redacted_block = RedactedThinkingBlock(data="encrypted-data")
+        msg = AssistantMessage(content=[redacted_block], model="claude-opus-4-6")
+        assert len(msg.content) == 1
+        assert isinstance(msg.content[0], RedactedThinkingBlock)
+        assert msg.content[0].data == "encrypted-data"
 
     def test_tool_use_block(self):
         """Test creating a ToolUseBlock."""

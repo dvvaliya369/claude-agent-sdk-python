@@ -608,6 +608,13 @@ class ThinkingBlock:
 
 
 @dataclass
+class RedactedThinkingBlock:
+    """Redacted thinking content block (encrypted by safety systems)."""
+
+    data: str
+
+
+@dataclass
 class ToolUseBlock:
     """Tool use content block."""
 
@@ -625,7 +632,9 @@ class ToolResultBlock:
     is_error: bool | None = None
 
 
-ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock
+ContentBlock = (
+    TextBlock | ThinkingBlock | RedactedThinkingBlock | ToolUseBlock | ToolResultBlock
+)
 
 
 # Message types

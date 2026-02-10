@@ -6,6 +6,7 @@ from claude_agent_sdk._errors import MessageParseError
 from claude_agent_sdk._internal.message_parser import parse_message
 from claude_agent_sdk.types import (
     AssistantMessage,
+    RedactedThinkingBlock,
     ResultMessage,
     SystemMessage,
     TextBlock,
@@ -269,6 +270,63 @@ class TestMessageParser:
         assert message.content[0].signature == "sig-123"
         assert isinstance(message.content[1], TextBlock)
         assert message.content[1].text == "Here's my response"
+
+    def test_parse_assistant_message_with_redacted_thinking(self):
+        """Test parsing an assistant message with redacted thinking block."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "redacted_thinking",
+                        "data": "EmwKAhgBEgy3va3pzix/LafPsn4aDFIT2Xlxh0L5L8rLVyIw",
+                    },
+                    {"type": "text", "text": "Here's my response"},
+                ],
+                "model": "claude-opus-4-6",
+            },
+        }
+        message = parse_message(data)
+        assert isinstance(message, AssistantMessage)
+        assert len(message.content) == 2
+        assert isinstance(message.content[0], RedactedThinkingBlock)
+        assert (
+            message.content[0].data
+            == "EmwKAhgBEgy3va3pzix/LafPsn4aDFIT2Xlxh0L5L8rLVyIw"
+        )
+        assert isinstance(message.content[1], TextBlock)
+        assert message.content[1].text == "Here's my response"
+
+    def test_parse_assistant_message_with_mixed_thinking_blocks(self):
+        """Test parsing an assistant message with both thinking and redacted thinking."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "thinking",
+                        "thinking": "Let me analyze this...",
+                        "signature": "sig-456",
+                    },
+                    {
+                        "type": "redacted_thinking",
+                        "data": "encrypted-data-here",
+                    },
+                    {"type": "text", "text": "The answer is 42"},
+                ],
+                "model": "claude-opus-4-6",
+            },
+        }
+        message = parse_message(data)
+        assert isinstance(message, AssistantMessage)
+        assert len(message.content) == 3
+        assert isinstance(message.content[0], ThinkingBlock)
+        assert message.content[0].thinking == "Let me analyze this..."
+        assert message.content[0].signature == "sig-456"
+        assert isinstance(message.content[1], RedactedThinkingBlock)
+        assert message.content[1].data == "encrypted-data-here"
+        assert isinstance(message.content[2], TextBlock)
+        assert message.content[2].text == "The answer is 42"
 
     def test_parse_valid_system_message(self):
         """Test parsing a valid system message."""
