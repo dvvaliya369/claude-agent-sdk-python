@@ -160,6 +160,20 @@ class TestSubprocessCLITransport:
         assert "--max-thinking-tokens" in cmd
         assert "5000" in cmd
 
+    def test_build_command_with_betas(self):
+        """Test building CLI command with beta features."""
+        transport = SubprocessCLITransport(
+            prompt="test",
+            options=make_options(
+                betas=["extended-thinking-2025-02-06", "context-1m-2025-08-07"]
+            ),
+        )
+
+        cmd = transport._build_command()
+        assert "--betas" in cmd
+        betas_idx = cmd.index("--betas")
+        assert cmd[betas_idx + 1] == "extended-thinking-2025-02-06,context-1m-2025-08-07"
+
     def test_build_command_with_add_dirs(self):
         """Test building CLI command with add_dirs option."""
         from pathlib import Path

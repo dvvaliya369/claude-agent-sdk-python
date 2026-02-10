@@ -29,6 +29,7 @@ async def test_include_partial_messages_stream_events():
         include_partial_messages=True,
         model="claude-sonnet-4-5",
         max_turns=2,
+        betas=["extended-thinking-2025-02-06"],
         env={
             "MAX_THINKING_TOKENS": "8000",
         },
@@ -97,6 +98,7 @@ async def test_include_partial_messages_thinking_deltas():
         include_partial_messages=True,
         model="claude-sonnet-4-5",
         max_turns=2,
+        betas=["extended-thinking-2025-02-06"],
         env={
             "MAX_THINKING_TOKENS": "8000",
         },

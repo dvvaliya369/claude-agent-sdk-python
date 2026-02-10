@@ -31,6 +31,7 @@ async def main():
         include_partial_messages=True,
         model="claude-sonnet-4-5",
         max_turns=2,
+        betas=["extended-thinking-2025-02-06"],
         env={
             "MAX_THINKING_TOKENS": "8000",
         },
