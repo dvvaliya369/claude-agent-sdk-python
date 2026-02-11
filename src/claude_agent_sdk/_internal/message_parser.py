@@ -79,12 +79,14 @@ def parse_message(data: dict[str, Any]) -> Message:
                         uuid=uuid,
                         parent_tool_use_id=parent_tool_use_id,
                         tool_use_result=tool_use_result,
+                        session_id=data.get("session_id"),
                     )
                 return UserMessage(
                     content=data["message"]["content"],
                     uuid=uuid,
                     parent_tool_use_id=parent_tool_use_id,
                     tool_use_result=tool_use_result,
+                    session_id=data.get("session_id"),
                 )
             except KeyError as e:
                 raise MessageParseError(
@@ -127,6 +129,7 @@ def parse_message(data: dict[str, Any]) -> Message:
                     model=data["message"]["model"],
                     parent_tool_use_id=data.get("parent_tool_use_id"),
                     error=data.get("error"),
+                    session_id=data.get("session_id"),
                 )
             except KeyError as e:
                 raise MessageParseError(
@@ -138,6 +141,7 @@ def parse_message(data: dict[str, Any]) -> Message:
                 return SystemMessage(
                     subtype=data["subtype"],
                     data=data,
+                    session_id=data.get("session_id"),
                 )
             except KeyError as e:
                 raise MessageParseError(

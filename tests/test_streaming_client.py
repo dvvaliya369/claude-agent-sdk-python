@@ -16,6 +16,7 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
     CLIConnectionError,
     ResultMessage,
+    SystemMessage,
     TextBlock,
     UserMessage,
     query,
@@ -831,5 +832,331 @@ class TestClaudeSDKClientEdgeCases:
                         for msg in messages
                     )
                     assert isinstance(messages[-1], ResultMessage)
+
+        anyio.run(_test)
+
+
+class TestSessionIsolation:
+    """Test that receive_messages/receive_response properly filter by session_id."""
+
+    def test_receive_response_filters_by_session_id(self):
+        """Test that receive_response(session_id=X) only yields messages for session X."""
+
+        async def _test():
+            with patch(
+                "claude_agent_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = create_mock_transport()
+                mock_transport_class.return_value = mock_transport
+
+                async def mock_receive():
+                    # Handle initialization
+                    await asyncio.sleep(0.01)
+                    written = mock_transport.write.call_args_list
+                    for call in written:
+                        data = call[0][0]
+                        try:
+                            msg = json.loads(data.strip())
+                            if (
+                                msg.get("type") == "control_request"
+                                and msg.get("request", {}).get("subtype")
+                                == "initialize"
+                            ):
+                                yield {
+                                    "type": "control_response",
+                                    "response": {
+                                        "request_id": msg.get("request_id"),
+                                        "subtype": "success",
+                                        "commands": [],
+                                        "output_style": "default",
+                                    },
+                                }
+                                break
+                        except (json.JSONDecodeError, KeyError, AttributeError):
+                            pass
+
+                    # Interleaved messages from two sessions
+                    yield {
+                        "type": "assistant",
+                        "session_id": "session-A",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "Response A"}],
+                            "model": "claude-opus-4-1-20250805",
+                        },
+                    }
+                    yield {
+                        "type": "assistant",
+                        "session_id": "session-B",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "Response B"}],
+                            "model": "claude-opus-4-1-20250805",
+                        },
+                    }
+                    yield {
+                        "type": "result",
+                        "subtype": "success",
+                        "duration_ms": 1000,
+                        "duration_api_ms": 800,
+                        "is_error": False,
+                        "num_turns": 1,
+                        "session_id": "session-A",
+                        "total_cost_usd": 0.001,
+                    }
+
+                mock_transport.read_messages = mock_receive
+
+                async with ClaudeSDKClient() as client:
+                    messages = [
+                        msg
+                        async for msg in client.receive_response(session_id="session-A")
+                    ]
+
+                    # Should only get session-A messages: assistant + result
+                    assert len(messages) == 2
+                    assert isinstance(messages[0], AssistantMessage)
+                    assert messages[0].content[0].text == "Response A"
+                    assert isinstance(messages[1], ResultMessage)
+                    assert messages[1].session_id == "session-A"
+
+        anyio.run(_test)
+
+    def test_receive_response_without_session_id_returns_all(self):
+        """Test backward compat: receive_response() without session_id returns all messages."""
+
+        async def _test():
+            with patch(
+                "claude_agent_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = create_mock_transport()
+                mock_transport_class.return_value = mock_transport
+
+                async def mock_receive():
+                    # Handle initialization
+                    await asyncio.sleep(0.01)
+                    written = mock_transport.write.call_args_list
+                    for call in written:
+                        data = call[0][0]
+                        try:
+                            msg = json.loads(data.strip())
+                            if (
+                                msg.get("type") == "control_request"
+                                and msg.get("request", {}).get("subtype")
+                                == "initialize"
+                            ):
+                                yield {
+                                    "type": "control_response",
+                                    "response": {
+                                        "request_id": msg.get("request_id"),
+                                        "subtype": "success",
+                                        "commands": [],
+                                        "output_style": "default",
+                                    },
+                                }
+                                break
+                        except (json.JSONDecodeError, KeyError, AttributeError):
+                            pass
+
+                    # Messages from different sessions
+                    yield {
+                        "type": "assistant",
+                        "session_id": "session-A",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "Response A"}],
+                            "model": "claude-opus-4-1-20250805",
+                        },
+                    }
+                    yield {
+                        "type": "assistant",
+                        "session_id": "session-B",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "Response B"}],
+                            "model": "claude-opus-4-1-20250805",
+                        },
+                    }
+                    yield {
+                        "type": "result",
+                        "subtype": "success",
+                        "duration_ms": 1000,
+                        "duration_api_ms": 800,
+                        "is_error": False,
+                        "num_turns": 1,
+                        "session_id": "session-A",
+                        "total_cost_usd": 0.001,
+                    }
+
+                mock_transport.read_messages = mock_receive
+
+                async with ClaudeSDKClient() as client:
+                    # No session_id filter — should get all 3 messages
+                    messages = [msg async for msg in client.receive_response()]
+
+                    assert len(messages) == 3
+                    assert isinstance(messages[0], AssistantMessage)
+                    assert isinstance(messages[1], AssistantMessage)
+                    assert isinstance(messages[2], ResultMessage)
+
+        anyio.run(_test)
+
+    def test_messages_without_session_id_pass_through_filter(self):
+        """Test that messages without session_id are yielded even when filtering."""
+
+        async def _test():
+            with patch(
+                "claude_agent_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = create_mock_transport()
+                mock_transport_class.return_value = mock_transport
+
+                async def mock_receive():
+                    # Handle initialization
+                    await asyncio.sleep(0.01)
+                    written = mock_transport.write.call_args_list
+                    for call in written:
+                        data = call[0][0]
+                        try:
+                            msg = json.loads(data.strip())
+                            if (
+                                msg.get("type") == "control_request"
+                                and msg.get("request", {}).get("subtype")
+                                == "initialize"
+                            ):
+                                yield {
+                                    "type": "control_response",
+                                    "response": {
+                                        "request_id": msg.get("request_id"),
+                                        "subtype": "success",
+                                        "commands": [],
+                                        "output_style": "default",
+                                    },
+                                }
+                                break
+                        except (json.JSONDecodeError, KeyError, AttributeError):
+                            pass
+
+                    # System message without session_id
+                    yield {
+                        "type": "system",
+                        "subtype": "info",
+                    }
+                    # Assistant message for session-A
+                    yield {
+                        "type": "assistant",
+                        "session_id": "session-A",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "Hello A"}],
+                            "model": "claude-opus-4-1-20250805",
+                        },
+                    }
+                    # Assistant message for session-B (should be filtered out)
+                    yield {
+                        "type": "assistant",
+                        "session_id": "session-B",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "Hello B"}],
+                            "model": "claude-opus-4-1-20250805",
+                        },
+                    }
+                    yield {
+                        "type": "result",
+                        "subtype": "success",
+                        "duration_ms": 500,
+                        "duration_api_ms": 400,
+                        "is_error": False,
+                        "num_turns": 1,
+                        "session_id": "session-A",
+                        "total_cost_usd": 0.001,
+                    }
+
+                mock_transport.read_messages = mock_receive
+
+                async with ClaudeSDKClient() as client:
+                    messages = [
+                        msg
+                        async for msg in client.receive_response(session_id="session-A")
+                    ]
+
+                    # System message (no session_id) + assistant A + result A = 3
+                    assert len(messages) == 3
+                    assert isinstance(messages[0], SystemMessage)
+                    assert isinstance(messages[1], AssistantMessage)
+                    assert messages[1].content[0].text == "Hello A"
+                    assert isinstance(messages[2], ResultMessage)
+
+        anyio.run(_test)
+
+    def test_receive_messages_filters_by_session_id(self):
+        """Test that receive_messages(session_id=X) filters correctly."""
+
+        async def _test():
+            with patch(
+                "claude_agent_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = create_mock_transport()
+                mock_transport_class.return_value = mock_transport
+
+                async def mock_receive():
+                    # Handle initialization
+                    await asyncio.sleep(0.01)
+                    written = mock_transport.write.call_args_list
+                    for call in written:
+                        data = call[0][0]
+                        try:
+                            msg = json.loads(data.strip())
+                            if (
+                                msg.get("type") == "control_request"
+                                and msg.get("request", {}).get("subtype")
+                                == "initialize"
+                            ):
+                                yield {
+                                    "type": "control_response",
+                                    "response": {
+                                        "request_id": msg.get("request_id"),
+                                        "subtype": "success",
+                                        "commands": [],
+                                        "output_style": "default",
+                                    },
+                                }
+                                break
+                        except (json.JSONDecodeError, KeyError, AttributeError):
+                            pass
+
+                    yield {
+                        "type": "assistant",
+                        "session_id": "s1",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "s1 msg"}],
+                            "model": "claude-opus-4-1-20250805",
+                        },
+                    }
+                    yield {
+                        "type": "assistant",
+                        "session_id": "s2",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "s2 msg"}],
+                            "model": "claude-opus-4-1-20250805",
+                        },
+                    }
+
+                mock_transport.read_messages = mock_receive
+
+                async with ClaudeSDKClient() as client:
+                    messages = []
+                    async for msg in client.receive_messages(session_id="s1"):
+                        messages.append(msg)
+                        if len(messages) >= 1:
+                            break
+
+                    assert len(messages) == 1
+                    assert isinstance(messages[0], AssistantMessage)
+                    assert messages[0].content[0].text == "s1 msg"
+                    assert messages[0].session_id == "s1"
 
         anyio.run(_test)

@@ -437,3 +437,103 @@ class TestMessageParser:
         message = parse_message(data)
         assert isinstance(message, AssistantMessage)
         assert message.error == "rate_limit"
+
+
+class TestSessionIdParsing:
+    """Test that session_id is parsed from raw data for all message types."""
+
+    def test_user_message_with_session_id(self):
+        """Test parsing user message with session_id."""
+        data = {
+            "type": "user",
+            "session_id": "sess-123",
+            "message": {"content": "Hello"},
+        }
+        message = parse_message(data)
+        assert isinstance(message, UserMessage)
+        assert message.session_id == "sess-123"
+
+    def test_user_message_without_session_id(self):
+        """Test parsing user message without session_id defaults to None."""
+        data = {
+            "type": "user",
+            "message": {"content": "Hello"},
+        }
+        message = parse_message(data)
+        assert isinstance(message, UserMessage)
+        assert message.session_id is None
+
+    def test_user_message_with_list_content_and_session_id(self):
+        """Test parsing user message with list content preserves session_id."""
+        data = {
+            "type": "user",
+            "session_id": "sess-456",
+            "message": {"content": [{"type": "text", "text": "Hello"}]},
+        }
+        message = parse_message(data)
+        assert isinstance(message, UserMessage)
+        assert message.session_id == "sess-456"
+
+    def test_assistant_message_with_session_id(self):
+        """Test parsing assistant message with session_id."""
+        data = {
+            "type": "assistant",
+            "session_id": "sess-789",
+            "message": {
+                "content": [{"type": "text", "text": "Hi"}],
+                "model": "claude-opus-4-1-20250805",
+            },
+        }
+        message = parse_message(data)
+        assert isinstance(message, AssistantMessage)
+        assert message.session_id == "sess-789"
+
+    def test_assistant_message_without_session_id(self):
+        """Test parsing assistant message without session_id defaults to None."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [{"type": "text", "text": "Hi"}],
+                "model": "claude-opus-4-1-20250805",
+            },
+        }
+        message = parse_message(data)
+        assert isinstance(message, AssistantMessage)
+        assert message.session_id is None
+
+    def test_system_message_with_session_id(self):
+        """Test parsing system message with session_id."""
+        data = {
+            "type": "system",
+            "subtype": "info",
+            "session_id": "sess-abc",
+        }
+        message = parse_message(data)
+        assert isinstance(message, SystemMessage)
+        assert message.session_id == "sess-abc"
+
+    def test_system_message_without_session_id(self):
+        """Test parsing system message without session_id defaults to None."""
+        data = {
+            "type": "system",
+            "subtype": "info",
+        }
+        message = parse_message(data)
+        assert isinstance(message, SystemMessage)
+        assert message.session_id is None
+
+    def test_result_message_session_id_unchanged(self):
+        """Test that ResultMessage still parses session_id as before."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "duration_ms": 1000,
+            "duration_api_ms": 800,
+            "is_error": False,
+            "num_turns": 1,
+            "session_id": "sess-result",
+            "total_cost_usd": 0.001,
+        }
+        message = parse_message(data)
+        assert isinstance(message, ResultMessage)
+        assert message.session_id == "sess-result"

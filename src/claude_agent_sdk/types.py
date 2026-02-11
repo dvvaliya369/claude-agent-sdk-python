@@ -647,6 +647,7 @@ class UserMessage:
     uuid: str | None = None
     parent_tool_use_id: str | None = None
     tool_use_result: dict[str, Any] | None = None
+    session_id: str | None = None
 
 
 @dataclass
@@ -657,6 +658,7 @@ class AssistantMessage:
     model: str
     parent_tool_use_id: str | None = None
     error: AssistantMessageError | None = None
+    session_id: str | None = None
 
 
 @dataclass
@@ -665,6 +667,7 @@ class SystemMessage:
 
     subtype: str
     data: dict[str, Any]
+    session_id: str | None = None
 
 
 @dataclass
