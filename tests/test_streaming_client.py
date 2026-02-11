@@ -571,6 +571,183 @@ class TestClaudeSDKClientStreaming:
 
         anyio.run(_test)
 
+    def test_clear_context_specific_session(self):
+        """Test clearing context for a specific session."""
+
+        async def _test():
+            with patch(
+                "claude_agent_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = create_mock_transport()
+                mock_transport_class.return_value = mock_transport
+
+                async with ClaudeSDKClient() as client:
+                    # Send queries to create session streams
+                    await client.query("Test 1", session_id="session-1")
+                    await client.query("Test 2", session_id="session-2")
+
+                    # Verify both session streams exist
+                    assert "session-1" in client._query._session_streams
+                    assert "session-2" in client._query._session_streams
+
+                    # Clear only session-1
+                    await client.clear_context(session_id="session-1")
+
+                    # Verify session-1 is cleared but session-2 remains
+                    assert "session-1" not in client._query._session_streams
+                    assert "session-2" in client._query._session_streams
+
+        anyio.run(_test)
+
+    def test_clear_context_all_sessions(self):
+        """Test clearing context for all sessions."""
+
+        async def _test():
+            with patch(
+                "claude_agent_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = create_mock_transport()
+                mock_transport_class.return_value = mock_transport
+
+                async with ClaudeSDKClient() as client:
+                    # Send queries to create session streams
+                    await client.query("Test 1", session_id="session-1")
+                    await client.query("Test 2", session_id="session-2")
+                    await client.query("Test 3", session_id="session-3")
+
+                    # Verify all session streams exist
+                    assert len(client._query._session_streams) == 3
+
+                    # Clear all sessions
+                    await client.clear_context()
+
+                    # Verify all sessions are cleared
+                    assert len(client._query._session_streams) == 0
+
+        anyio.run(_test)
+
+    def test_clear_context_not_connected(self):
+        """Test clear_context when not connected raises error."""
+
+        async def _test():
+            client = ClaudeSDKClient()
+            with pytest.raises(CLIConnectionError, match="Not connected"):
+                await client.clear_context()
+
+        anyio.run(_test)
+
+    def test_clear_context_fresh_conversation(self):
+        """Test using clear_context for fresh conversations in same session."""
+
+        async def _test():
+            with patch(
+                "claude_agent_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = create_mock_transport()
+                mock_transport_class.return_value = mock_transport
+
+                # Mock the message stream with control protocol support
+                async def mock_receive():
+                    # First handle initialization
+                    await asyncio.sleep(0.01)
+                    written = mock_transport.write.call_args_list
+                    for call in written:
+                        data = call[0][0]
+                        try:
+                            msg = json.loads(data.strip())
+                            if (
+                                msg.get("type") == "control_request"
+                                and msg.get("request", {}).get("subtype")
+                                == "initialize"
+                            ):
+                                yield {
+                                    "type": "control_response",
+                                    "response": {
+                                        "request_id": msg.get("request_id"),
+                                        "subtype": "success",
+                                        "commands": [],
+                                        "output_style": "default",
+                                    },
+                                }
+                                break
+                        except (json.JSONDecodeError, KeyError, AttributeError):
+                            pass
+
+                    # Yield messages for first query
+                    yield {
+                        "type": "assistant",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "Response 1"}],
+                            "model": "claude-opus-4-1-20250805",
+                        },
+                        "session_id": "test-session",
+                    }
+                    yield {
+                        "type": "result",
+                        "subtype": "success",
+                        "duration_ms": 1000,
+                        "duration_api_ms": 800,
+                        "is_error": False,
+                        "num_turns": 1,
+                        "session_id": "test-session",
+                        "total_cost_usd": 0.001,
+                    }
+
+                    # After clear_context, yield messages for second query
+                    await asyncio.sleep(0.1)
+                    yield {
+                        "type": "assistant",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "Response 2"}],
+                            "model": "claude-opus-4-1-20250805",
+                        },
+                        "session_id": "test-session",
+                    }
+                    yield {
+                        "type": "result",
+                        "subtype": "success",
+                        "duration_ms": 1000,
+                        "duration_api_ms": 800,
+                        "is_error": False,
+                        "num_turns": 1,
+                        "session_id": "test-session",
+                        "total_cost_usd": 0.001,
+                    }
+
+                mock_transport.read_messages = mock_receive
+
+                async with ClaudeSDKClient() as client:
+                    # First conversation
+                    await client.query("First query", session_id="test-session")
+                    messages1 = [
+                        msg
+                        async for msg in client.receive_response(
+                            session_id="test-session"
+                        )
+                    ]
+                    assert len(messages1) == 2
+                    assert isinstance(messages1[0], AssistantMessage)
+                    assert messages1[0].content[0].text == "Response 1"
+
+                    # Clear context for this session
+                    await client.clear_context(session_id="test-session")
+
+                    # Second conversation in same session
+                    await client.query("Second query", session_id="test-session")
+                    messages2 = [
+                        msg
+                        async for msg in client.receive_response(
+                            session_id="test-session"
+                        )
+                    ]
+                    assert len(messages2) == 2
+                    assert isinstance(messages2[0], AssistantMessage)
+                    assert messages2[0].content[0].text == "Response 2"
+
+        anyio.run(_test)
+
 
 class TestQueryWithAsyncIterable:
     """Test query() function with async iterable inputs."""

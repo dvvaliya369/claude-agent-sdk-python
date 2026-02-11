@@ -648,6 +648,59 @@ class Query:
 
             yield message
 
+    async def clear_context(self, session_id: str | None = None) -> None:
+        """Clear conversation context for a session without reconnecting.
+
+        This provides an in-process context reset that clears session-specific state
+        while maintaining the persistent connection to avoid reconnection overhead.
+
+        Args:
+            session_id: Optional session ID to clear. If provided, only that session's
+                       context is cleared. If None, all session contexts are cleared
+                       but the connection remains active.
+
+        Example:
+            ```python
+            async with ClaudeSDKClient() as client:
+                # First conversation
+                await client.query("Help me with task A", session_id="session-1")
+                async for msg in client.receive_response(session_id="session-1"):
+                    print(msg)
+
+                # Clear context for session-1
+                await client.clear_context(session_id="session-1")
+
+                # Start fresh conversation in same session
+                await client.query("Help me with task B", session_id="session-1")
+                async for msg in client.receive_response(session_id="session-1"):
+                    print(msg)
+            ```
+        """
+        if session_id is not None:
+            # Clear specific session
+            if session_id in self._session_streams:
+                send_stream, receive_stream = self._session_streams[session_id]
+                # Drain any pending messages in the receive stream
+                with anyio.CancelScope() as scope:
+                    scope.cancel()
+                    with suppress(anyio.get_cancelled_exc_class()):
+                        async for _ in receive_stream:
+                            pass
+                # Close and remove the session stream
+                await send_stream.aclose()
+                del self._session_streams[session_id]
+        else:
+            # Clear all sessions
+            for send_stream, receive_stream in list(self._session_streams.values()):
+                # Drain any pending messages
+                with anyio.CancelScope() as scope:
+                    scope.cancel()
+                    with suppress(anyio.get_cancelled_exc_class()):
+                        async for _ in receive_stream:
+                            pass
+                await send_stream.aclose()
+            self._session_streams.clear()
+
     async def close(self) -> None:
         """Close the query and transport."""
         self._closed = True

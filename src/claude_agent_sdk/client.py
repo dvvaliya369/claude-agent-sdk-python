@@ -424,6 +424,47 @@ class ClaudeSDKClient:
             if isinstance(message, ResultMessage):
                 return
 
+    async def clear_context(self, session_id: str | None = None) -> None:
+        """Clear conversation context for a session without reconnecting.
+
+        This provides an in-process context reset that clears session-specific state
+        while maintaining the persistent connection to avoid reconnection overhead.
+        This is useful when you need to reset context frequently but want to avoid
+        the performance cost of reconnecting.
+
+        Args:
+            session_id: Optional session ID to clear. If provided, only that session's
+                       context is cleared. If None, all session contexts are cleared
+                       but the connection remains active.
+
+        Example:
+            ```python
+            async with ClaudeSDKClient() as client:
+                # First conversation
+                await client.query("Help me with task A", session_id="session-1")
+                async for msg in client.receive_response(session_id="session-1"):
+                    print(msg)
+
+                # Clear context for session-1 (avoids reconnection overhead)
+                await client.clear_context(session_id="session-1")
+
+                # Start fresh conversation in same session
+                await client.query("Help me with task B", session_id="session-1")
+                async for msg in client.receive_response(session_id="session-1"):
+                    print(msg)
+            ```
+
+        Note:
+            This method only clears client-side session state (message streams).
+            The underlying Claude Code CLI process maintains its own conversation
+            history. To get a truly fresh context, you should either:
+            1. Use a new session_id for each independent conversation
+            2. Or disconnect() and reconnect() for a complete reset (slower but thorough)
+        """
+        if not self._query:
+            raise CLIConnectionError("Not connected. Call connect() first.")
+        await self._query.clear_context(session_id)
+
     async def disconnect(self) -> None:
         """Disconnect from Claude."""
         if self._query:
