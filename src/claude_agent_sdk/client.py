@@ -205,6 +205,11 @@ class ClaudeSDKClient:
         if not self._query or not self._transport:
             raise CLIConnectionError("Not connected. Call connect() first.")
 
+        # Eagerly create session stream to ensure proper isolation
+        # This ensures that responses for this session will be routed correctly
+        # even if receive_messages(session_id) hasn't been called yet
+        self._query.create_session_stream(session_id)
+
         # Handle string prompts
         if isinstance(prompt, str):
             message = {
