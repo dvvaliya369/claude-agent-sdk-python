@@ -297,6 +297,9 @@ class SubprocessCLITransport(Transport):
                 # Flag with value
                 cmd.extend([f"--{flag}", str(value)])
 
+        if self._options.thinking_type is not None:
+            cmd.extend(["--thinking-type", self._options.thinking_type])
+
         if self._options.max_thinking_tokens is not None:
             cmd.extend(
                 ["--max-thinking-tokens", str(self._options.max_thinking_tokens)]

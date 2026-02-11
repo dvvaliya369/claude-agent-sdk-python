@@ -158,6 +158,30 @@ class TestOptions:
         assert options.model == "claude-sonnet-4-5"
         assert options.permission_prompt_tool_name == "CustomTool"
 
+    def test_claude_code_options_with_thinking_type_adaptive(self):
+        """Test Options with adaptive thinking type for Opus 4.6+."""
+        options = ClaudeAgentOptions(
+            model="claude-opus-4-6",
+            thinking_type="adaptive",
+        )
+        assert options.thinking_type == "adaptive"
+        assert options.max_thinking_tokens is None
+
+    def test_claude_code_options_with_thinking_type_enabled(self):
+        """Test Options with enabled thinking type and budget tokens."""
+        options = ClaudeAgentOptions(
+            model="claude-opus-4-5-20251101",
+            thinking_type="enabled",
+            max_thinking_tokens=10000,
+        )
+        assert options.thinking_type == "enabled"
+        assert options.max_thinking_tokens == 10000
+
+    def test_claude_code_options_thinking_type_defaults_to_none(self):
+        """Test that thinking_type defaults to None."""
+        options = ClaudeAgentOptions()
+        assert options.thinking_type is None
+
 
 class TestHookInputTypes:
     """Test hook input type definitions."""

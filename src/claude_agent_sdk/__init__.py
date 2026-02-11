@@ -60,6 +60,7 @@ from .types import (
     SystemMessage,
     TextBlock,
     ThinkingBlock,
+    ThinkingType,
     ToolPermissionContext,
     ToolResultBlock,
     ToolUseBlock,
@@ -372,6 +373,8 @@ __all__ = [
     "SdkPluginConfig",
     # Beta support
     "SdkBeta",
+    # Thinking type
+    "ThinkingType",
     # Sandbox support
     "SandboxSettings",
     "SandboxNetworkConfig",

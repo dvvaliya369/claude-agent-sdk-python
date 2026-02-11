@@ -149,6 +149,42 @@ class TestSubprocessCLITransport:
         assert "--fallback-model" in cmd
         assert "sonnet" in cmd
 
+    def test_build_command_with_thinking_type_adaptive(self):
+        """Test building CLI command with thinking_type='adaptive' for Opus 4.6+."""
+        transport = SubprocessCLITransport(
+            prompt="test",
+            options=make_options(thinking_type="adaptive"),
+        )
+
+        cmd = transport._build_command()
+        assert "--thinking-type" in cmd
+        thinking_type_idx = cmd.index("--thinking-type")
+        assert cmd[thinking_type_idx + 1] == "adaptive"
+
+    def test_build_command_with_thinking_type_enabled(self):
+        """Test building CLI command with thinking_type='enabled' for manual thinking."""
+        transport = SubprocessCLITransport(
+            prompt="test",
+            options=make_options(thinking_type="enabled", max_thinking_tokens=10000),
+        )
+
+        cmd = transport._build_command()
+        assert "--thinking-type" in cmd
+        thinking_type_idx = cmd.index("--thinking-type")
+        assert cmd[thinking_type_idx + 1] == "enabled"
+        assert "--max-thinking-tokens" in cmd
+        assert "10000" in cmd
+
+    def test_build_command_without_thinking_type(self):
+        """Test that --thinking-type is not included when thinking_type is None."""
+        transport = SubprocessCLITransport(
+            prompt="test",
+            options=make_options(),
+        )
+
+        cmd = transport._build_command()
+        assert "--thinking-type" not in cmd
+
     def test_build_command_with_max_thinking_tokens(self):
         """Test building CLI command with max_thinking_tokens option."""
         transport = SubprocessCLITransport(

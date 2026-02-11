@@ -20,6 +20,12 @@ PermissionMode = Literal["default", "acceptEdits", "plan", "bypassPermissions"]
 # SDK Beta features - see https://docs.anthropic.com/en/api/beta-headers
 SdkBeta = Literal["context-1m-2025-08-07"]
 
+# Thinking type for extended thinking configuration
+# - "enabled": Manual extended thinking with budget_tokens (for models like claude-opus-4-5)
+# - "adaptive": Adaptive thinking where the model dynamically allocates thinking tokens
+#   (recommended for claude-opus-4-6 and newer models)
+ThinkingType = Literal["enabled", "adaptive"]
+
 # Agent definitions
 SettingSource = Literal["user", "project", "local"]
 
@@ -752,7 +758,12 @@ class ClaudeAgentOptions:
     sandbox: SandboxSettings | None = None
     # Plugin configurations for custom plugins
     plugins: list[SdkPluginConfig] = field(default_factory=list)
-    # Max tokens for thinking blocks
+    # Thinking type configuration for extended thinking
+    # - "enabled": Manual extended thinking with budget_tokens (use with max_thinking_tokens)
+    # - "adaptive": Adaptive thinking (recommended for claude-opus-4-6+, no budget_tokens needed)
+    # - None: Use the CLI/model default behavior
+    thinking_type: ThinkingType | None = None
+    # Max tokens for thinking blocks (used with thinking_type="enabled")
     max_thinking_tokens: int | None = None
     # Output format for structured outputs (matches Messages API structure)
     # Example: {"type": "json_schema", "schema": {"type": "object", "properties": {...}}}
