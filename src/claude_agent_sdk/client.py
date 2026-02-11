@@ -340,6 +340,58 @@ class ClaudeSDKClient:
             raise CLIConnectionError("Not connected. Call connect() first.")
         await self._query.rewind_files(user_message_id)
 
+    async def clear_context(self) -> None:
+        """Clear the conversation context without reconnecting.
+
+        This provides a true in-process context reset that:
+        - Clears the conversation history in the CLI subprocess
+        - Clears active session tracking to allow new sessions
+        - Avoids the overhead of disconnect/reconnect cycle
+        - Maintains the same subprocess and connection
+        - Provides reliable reset semantics for reusing the client
+
+        This is useful when you want to start a fresh conversation
+        without the cost of tearing down and recreating the connection.
+        Unlike `disconnect()` followed by `connect()`, this method:
+        - Does not restart the subprocess
+        - Does not re-initialize MCP servers
+        - Completes much faster (no reconnection overhead)
+
+        After calling `clear_context()`, you can use a different `session_id`
+        with the same client instance, which is normally not allowed due to
+        session isolation.
+
+        Example:
+            ```python
+            async with ClaudeSDKClient() as client:
+                # First conversation
+                await client.query("What is 2+2?", session_id="session_1")
+                async for msg in client.receive_response(session_id="session_1"):
+                    print(msg)
+
+                # Clear context to start fresh
+                await client.clear_context()
+
+                # New conversation with different session (now allowed)
+                await client.query("What is 3+3?", session_id="session_2")
+                async for msg in client.receive_response(session_id="session_2"):
+                    print(msg)
+            ```
+
+        Note:
+            This method requires streaming mode (which is the default for
+            ClaudeSDKClient). It sends a control request to the CLI to clear
+            the conversation context.
+        """
+        if not self._query:
+            raise CLIConnectionError("Not connected. Call connect() first.")
+        
+        # Clear the conversation context in the CLI
+        await self._query.clear_context()
+        
+        # Clear active sessions to allow reuse with different session IDs
+        self._active_sessions.clear()
+
     async def get_mcp_status(self) -> dict[str, Any]:
         """Get current MCP server connection status (only works with streaming mode).
 

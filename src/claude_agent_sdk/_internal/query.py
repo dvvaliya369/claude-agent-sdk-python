@@ -567,6 +567,37 @@ class Query:
             }
         )
 
+    async def clear_context(self) -> None:
+        """Clear the conversation context without reconnecting.
+
+        This provides a true in-process context reset that:
+        - Clears the conversation history in the CLI subprocess
+        - Avoids the overhead of disconnect/reconnect cycle
+        - Maintains the same subprocess and connection
+        - Provides reliable reset semantics for reusing the client
+
+        This is useful when you want to start a fresh conversation
+        without the cost of tearing down and recreating the connection.
+
+        Example:
+            ```python
+            async with ClaudeSDKClient() as client:
+                # First conversation
+                await client.query("What is 2+2?", session_id="session_1")
+                async for msg in client.receive_response(session_id="session_1"):
+                    pass
+
+                # Clear context to start fresh
+                await client.clear_context()
+
+                # New conversation with different session
+                await client.query("What is 3+3?", session_id="session_2")
+                async for msg in client.receive_response(session_id="session_2"):
+                    pass
+            ```
+        """
+        await self._send_control_request({"subtype": "clear_context"})
+
     async def stream_input(self, stream: AsyncIterable[dict[str, Any]]) -> None:
         """Stream input messages to transport.
 

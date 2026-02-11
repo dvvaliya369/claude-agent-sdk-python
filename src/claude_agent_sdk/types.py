@@ -810,6 +810,10 @@ class SDKControlRewindFilesRequest(TypedDict):
     user_message_id: str
 
 
+class SDKControlClearContextRequest(TypedDict):
+    subtype: Literal["clear_context"]
+
+
 class SDKControlRequest(TypedDict):
     type: Literal["control_request"]
     request_id: str
@@ -821,6 +825,7 @@ class SDKControlRequest(TypedDict):
         | SDKHookCallbackRequest
         | SDKControlMcpMessageRequest
         | SDKControlRewindFilesRequest
+        | SDKControlClearContextRequest
     )
 
 
