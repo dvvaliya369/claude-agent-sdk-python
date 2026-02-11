@@ -1,0 +1,22 @@
+{
+  "test_findings": {
+    "models_with_thinking_blocks": [
+      "claude-opus-4-6",
+      "claude-opus-4-1-20250805"
+    ],
+    "models_with_redacted_thinking": [
+      "claude-opus-4-6",
+      "claude-opus-4-1-20250805"
+    ],
+    "thinking_block_tests": [
+      "test_parse_assistant_message_with_thinking",
+      "test_parse_assistant_message_with_redacted_thinking",
+      "test_parse_assistant_message_with_mixed_thinking_blocks"
+    ]
+  },
+  "conclusion": {
+    "opus_45_has_thinking": false,
+    "opus_46_has_thinking": true,
+    "opus_46_has_redacted": true
+  }
+}
