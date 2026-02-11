@@ -176,14 +176,20 @@ class ClaudeSDKClient:
         if prompt is not None and isinstance(prompt, AsyncIterable) and self._query._tg:
             self._query._tg.start_soon(self._query.stream_input, prompt)
 
-    async def receive_messages(self) -> AsyncIterator[Message]:
-        """Receive all messages from Claude."""
+    async def receive_messages(self, session_id: str | None = None) -> AsyncIterator[Message]:
+        """Receive all messages from Claude.
+
+        Args:
+            session_id: Optional session ID to filter messages for. If provided,
+                       only messages for that specific session will be yielded.
+                       This enables session isolation when using multiple concurrent queries.
+        """
         if not self._query:
             raise CLIConnectionError("Not connected. Call connect() first.")
 
         from ._internal.message_parser import parse_message
 
-        async for data in self._query.receive_messages():
+        async for data in self._query.receive_messages(session_id=session_id):
             yield parse_message(data)
 
     async def query(
@@ -353,7 +359,7 @@ class ClaudeSDKClient:
         # Return the initialization result that was already obtained during connect
         return getattr(self._query, "_initialization_result", None)
 
-    async def receive_response(self) -> AsyncIterator[Message]:
+    async def receive_response(self, session_id: str | None = None) -> AsyncIterator[Message]:
         """
         Receive messages from Claude until and including a ResultMessage.
 
@@ -366,6 +372,11 @@ class ClaudeSDKClient:
         - Terminates immediately after yielding a ResultMessage
         - The ResultMessage IS included in the yielded messages
         - If no ResultMessage is received, the iterator continues indefinitely
+
+        Args:
+            session_id: Optional session ID to filter messages for. If provided,
+                       only messages for that specific session will be yielded.
+                       This enables session isolation when using multiple concurrent queries.
 
         Yields:
             Message: Each message received (UserMessage, AssistantMessage, SystemMessage, ResultMessage)
@@ -385,11 +396,25 @@ class ClaudeSDKClient:
                         # Iterator will terminate after this message
             ```
 
+        Example with session isolation:
+            ```python
+            async with ClaudeSDKClient() as client:
+                # Send queries for different sessions
+                await client.query("Question 1", session_id="session-a")
+                await client.query("Question 2", session_id="session-b")
+
+                # Receive responses for each session independently
+                async for msg in client.receive_response(session_id="session-a"):
+                    print(f"Session A: {msg}")
+                    if isinstance(msg, ResultMessage):
+                        break
+            ```
+
         Note:
             To collect all messages: `messages = [msg async for msg in client.receive_response()]`
             The final message in the list will always be a ResultMessage.
         """
-        async for message in self.receive_messages():
+        async for message in self.receive_messages(session_id=session_id):
             yield message
             if isinstance(message, ResultMessage):
                 return

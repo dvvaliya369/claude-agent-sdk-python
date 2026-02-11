@@ -105,6 +105,10 @@ class Query:
         self._message_send, self._message_receive = anyio.create_memory_object_stream[
             dict[str, Any]
         ](max_buffer_size=100)
+        # Session-specific message streams for isolation
+        self._session_streams: dict[
+            str, tuple[anyio.abc.ObjectSendStream[dict[str, Any]], anyio.abc.ObjectReceiveStream[dict[str, Any]]]
+        ] = {}
         self._tg: anyio.abc.TaskGroup | None = None
         self._initialized = False
         self._closed = False
@@ -210,8 +214,14 @@ class Query:
                 if msg_type == "result":
                     self._first_result_event.set()
 
-                # Regular SDK messages go to the stream
-                await self._message_send.send(message)
+                # Route messages to session-specific streams if available
+                session_id = message.get("session_id")
+                if session_id and session_id in self._session_streams:
+                    send_stream, _ = self._session_streams[session_id]
+                    await send_stream.send(message)
+                else:
+                    # Regular SDK messages go to the global stream
+                    await self._message_send.send(message)
 
         except anyio.get_cancelled_exc_class():
             # Task was cancelled - this is expected behavior
@@ -601,9 +611,35 @@ class Query:
         except Exception as e:
             logger.debug(f"Error streaming input: {e}")
 
-    async def receive_messages(self) -> AsyncIterator[dict[str, Any]]:
-        """Receive SDK messages (not control messages)."""
-        async for message in self._message_receive:
+    def create_session_stream(self, session_id: str) -> anyio.abc.ObjectReceiveStream[dict[str, Any]]:
+        """Create a new session-specific message stream for isolation.
+
+        Args:
+            session_id: The session ID to create a stream for
+
+        Returns:
+            A receive stream for messages specific to this session
+        """
+        if session_id not in self._session_streams:
+            send, receive = anyio.create_memory_object_stream[dict[str, Any]](max_buffer_size=100)
+            self._session_streams[session_id] = (send, receive)
+        _, receive = self._session_streams[session_id]
+        return receive
+
+    async def receive_messages(self, session_id: str | None = None) -> AsyncIterator[dict[str, Any]]:
+        """Receive SDK messages (not control messages).
+
+        Args:
+            session_id: Optional session ID to receive messages for. If provided,
+                       only messages for that session will be yielded.
+        """
+        # Use session-specific stream if session_id is provided
+        if session_id is not None:
+            receive_stream = self.create_session_stream(session_id)
+        else:
+            receive_stream = self._message_receive
+
+        async for message in receive_stream:
             # Check for special messages
             if message.get("type") == "end":
                 break
@@ -620,6 +656,12 @@ class Query:
             # Wait for task group to complete cancellation
             with suppress(anyio.get_cancelled_exc_class()):
                 await self._tg.__aexit__(None, None, None)
+
+        # Close all session streams
+        for send_stream, _ in self._session_streams.values():
+            await send_stream.aclose()
+        self._session_streams.clear()
+
         await self.transport.close()
 
     # Make Query an async iterator
