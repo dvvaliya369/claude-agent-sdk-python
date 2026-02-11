@@ -812,6 +812,7 @@ class SDKControlRewindFilesRequest(TypedDict):
 
 class SDKControlClearContextRequest(TypedDict):
     subtype: Literal["clear_context"]
+    session_id: NotRequired[str]  # Optional: clear context for specific session only
 
 
 class SDKControlRequest(TypedDict):

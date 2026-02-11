@@ -567,7 +567,7 @@ class Query:
             }
         )
 
-    async def clear_context(self) -> None:
+    async def clear_context(self, session_id: str | None = None) -> None:
         """Clear the conversation context without reconnecting.
 
         This provides a true in-process context reset that:
@@ -575,6 +575,11 @@ class Query:
         - Avoids the overhead of disconnect/reconnect cycle
         - Maintains the same subprocess and connection
         - Provides reliable reset semantics for reusing the client
+
+        Args:
+            session_id: Optional session identifier. If provided, only clears
+                context for that specific session. If None (default), clears
+                all conversation context.
 
         This is useful when you want to start a fresh conversation
         without the cost of tearing down and recreating the connection.
@@ -587,7 +592,10 @@ class Query:
                 async for msg in client.receive_response(session_id="session_1"):
                     pass
 
-                # Clear context to start fresh
+                # Clear context for specific session
+                await client.clear_context(session_id="session_1")
+
+                # Or clear all context
                 await client.clear_context()
 
                 # New conversation with different session
@@ -596,7 +604,10 @@ class Query:
                     pass
             ```
         """
-        await self._send_control_request({"subtype": "clear_context"})
+        request: dict[str, Any] = {"subtype": "clear_context"}
+        if session_id is not None:
+            request["session_id"] = session_id
+        await self._send_control_request(request)
 
     async def stream_input(self, stream: AsyncIterable[dict[str, Any]]) -> None:
         """Stream input messages to transport.

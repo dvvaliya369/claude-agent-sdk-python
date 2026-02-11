@@ -278,3 +278,124 @@ async def test_clear_context_control_request_format():
     # Since we mocked clear_context at the Query level, we need to test differently
     # Let's verify the method was called
     assert len(client._active_sessions) == 0
+
+
+@pytest.mark.asyncio
+async def test_clear_context_with_session_id():
+    """Test that clear_context can clear a specific session."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    options = ClaudeAgentOptions(max_turns=1, allowed_tools=[])
+    client = ClaudeSDKClient(options=options)
+
+    # Mock the internal state
+    mock_query = MagicMock()
+    mock_query.clear_context = AsyncMock()
+    mock_transport = MagicMock()
+    mock_transport.write = AsyncMock()
+
+    client._query = mock_query
+    client._transport = mock_transport
+
+    # Add multiple sessions
+    await client.query("Message 1", session_id="session_A")
+    await client.query("Message 2", session_id="session_A")
+    assert "session_A" in client._active_sessions
+
+    # Clear context for specific session
+    await client.clear_context(session_id="session_A")
+
+    # Verify the session was removed
+    assert "session_A" not in client._active_sessions
+    # Verify clear_context was called with session_id
+    mock_query.clear_context.assert_called_once_with(session_id="session_A")
+
+
+@pytest.mark.asyncio
+async def test_clear_context_specific_session_allows_reuse():
+    """Test that clearing a specific session allows reusing that session_id."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    options = ClaudeAgentOptions(max_turns=1, allowed_tools=[])
+    client = ClaudeSDKClient(options=options)
+
+    # Mock the internal state
+    mock_query = MagicMock()
+    mock_query.clear_context = AsyncMock()
+    mock_transport = MagicMock()
+    mock_transport.write = AsyncMock()
+
+    client._query = mock_query
+    client._transport = mock_transport
+
+    # Use session_A
+    await client.query("Message 1", session_id="session_A")
+    assert "session_A" in client._active_sessions
+
+    # Clear context for session_A specifically
+    await client.clear_context(session_id="session_A")
+    assert "session_A" not in client._active_sessions
+
+    # Reuse session_A (should work since it was cleared)
+    await client.query("Message 2", session_id="session_A")
+    assert "session_A" in client._active_sessions
+
+
+@pytest.mark.asyncio
+async def test_clear_context_all_vs_specific():
+    """Test difference between clearing all context vs specific session."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    options = ClaudeAgentOptions(max_turns=1, allowed_tools=[])
+    client = ClaudeSDKClient(options=options)
+
+    # Mock the internal state
+    mock_query = MagicMock()
+    mock_query.clear_context = AsyncMock()
+    mock_transport = MagicMock()
+    mock_transport.write = AsyncMock()
+
+    client._query = mock_query
+    client._transport = mock_transport
+
+    # Add a session
+    await client.query("Message 1", session_id="session_A")
+    assert "session_A" in client._active_sessions
+
+    # Clear all context (no session_id parameter)
+    await client.clear_context()
+
+    # All sessions should be cleared
+    assert len(client._active_sessions) == 0
+    # Verify clear_context was called without session_id
+    mock_query.clear_context.assert_called_with(session_id=None)
+
+
+@pytest.mark.asyncio
+async def test_clear_context_nonexistent_session():
+    """Test that clearing a non-existent session is safe."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    options = ClaudeAgentOptions(max_turns=1, allowed_tools=[])
+    client = ClaudeSDKClient(options=options)
+
+    # Mock the internal state
+    mock_query = MagicMock()
+    mock_query.clear_context = AsyncMock()
+    mock_transport = MagicMock()
+    mock_transport.write = AsyncMock()
+
+    client._query = mock_query
+    client._transport = mock_transport
+
+    # Use session_A
+    await client.query("Message 1", session_id="session_A")
+    assert "session_A" in client._active_sessions
+
+    # Clear context for non-existent session_B (should not error)
+    await client.clear_context(session_id="session_B")
+
+    # session_A should still be active
+    assert "session_A" in client._active_sessions
+    # Verify clear_context was called with session_B
+    mock_query.clear_context.assert_called_once_with(session_id="session_B")
