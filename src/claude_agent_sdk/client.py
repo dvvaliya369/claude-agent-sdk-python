@@ -64,6 +64,7 @@ class ClaudeSDKClient:
         self._custom_transport = transport
         self._transport: Transport | None = None
         self._query: Any | None = None
+        self._active_sessions: set[str] = set()  # Track active session IDs
         os.environ["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py-client"
 
     def _convert_hooks_to_internal_format(
@@ -210,9 +211,31 @@ class ClaudeSDKClient:
         Args:
             prompt: Either a string message or an async iterable of message dictionaries
             session_id: Session identifier for the conversation
+            
+        Raises:
+            ValueError: If attempting to use multiple session IDs with a single client instance.
+                       Each ClaudeSDKClient instance can only handle one session to ensure
+                       conversation context isolation.
+        
+        Note:
+            For multiple concurrent sessions, create separate ClaudeSDKClient instances.
+            Using different session_id values with the same client instance will raise an error
+            to prevent accidental context leakage between sessions.
         """
         if not self._query or not self._transport:
             raise CLIConnectionError("Not connected. Call connect() first.")
+
+        # Validate session isolation: only one session per client instance
+        if self._active_sessions and session_id not in self._active_sessions:
+            raise ValueError(
+                f"Session isolation error: This ClaudeSDKClient instance is already "
+                f"handling session(s) {self._active_sessions}. Cannot switch to session '{session_id}'. "
+                f"To use multiple sessions, create separate ClaudeSDKClient instances for each session. "
+                f"This prevents conversation context from being shared across different sessions."
+            )
+        
+        # Track this session as active
+        self._active_sessions.add(session_id)
 
         # Handle string prompts
         if isinstance(prompt, str):
@@ -425,6 +448,7 @@ class ClaudeSDKClient:
             await self._query.close()
             self._query = None
         self._transport = None
+        self._active_sessions.clear()
 
     async def __aenter__(self) -> "ClaudeSDKClient":
         """Enter async context - automatically connects with empty stream for interactive use."""
